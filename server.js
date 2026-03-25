@@ -88,21 +88,20 @@ app.post('/api/summarize', requireAuth, async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'anthropic/claude-sonnet-4-5',
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await response.json();
-    const text = data.content?.map(c => c.text || '').join('') || '요약 실패';
+    const text = data.choices?.[0]?.message?.content || '요약 실패';
 
     // 디스코드로도 자동 전송
     await sendToDiscord(text);
@@ -158,21 +157,20 @@ async function dailyJob() {
     // Claude 요약
     const prompt = `다음 Reddit/GitHub 트렌드를 한국어로 요약해줘.\n\n[Reddit]\n${reddit.join('\n')}\n\n[GitHub]\n${github.join('\n')}\n\n1. 가장 뜨거운 트렌드 3가지 (각 2-3문장)\n2. 오늘의 핵심 한줄 요약\n\n친근하게 써줘.`;
 
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const claudeRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'anthropic/claude-sonnet-4-5',
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
     const claudeData = await claudeRes.json();
-    const summary = claudeData.content?.map(c => c.text || '').join('') || '요약 실패';
+    const summary = claudeData.choices?.[0]?.message?.content || '요약 실패';
 
     await sendToDiscord(summary);
     console.log('자동 수집 완료 + 디스코드 전송');
