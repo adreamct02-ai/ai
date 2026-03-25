@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 트렌드 레이더</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #f5f5f3; color: #111; min-height: 100vh; }
+    header { background: white; border-bottom: 0.5px solid #e0e0e0; padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    header h1 { font-size: 15px; font-weight: 500; }
+    header a { font-size: 12px; color: #888; text-decoration: none; }
+    header a:hover { color: #111; }
+    .container { max-width: 700px; margin: 0 auto; padding: 28px 16px; }
+    .top-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+    .top-bar input { flex: 1; padding: 9px 14px; border: 0.5px solid #ddd; border-radius: 8px; font-size: 13px; background: white; outline: none; }
+    .top-bar input:focus { border-color: #999; }
+    .fetch-btn { background: #111; color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .fetch-btn:hover { opacity: 0.82; }
+    .fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .sources { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .source-card { background: white; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #ddd; flex-shrink: 0; }
+    .dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+    .dot.active { background: #22c55e; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+    .source-info .name { font-size: 13px; font-weight: 500; }
+    .source-info .desc { font-size: 11px; color: #888; margin-top: 2px; }
+    .summary-box { background: white; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+    .summary-label { font-size: 11px; font-weight: 500; color: #5b7fdb; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+    .summary-text { font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .tab { background: white; border: 0.5px solid #ddd; border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; color: #555; }
+    .tab.active { background: #111; color: white; border-color: #111; }
+    .items { display: flex; flex-direction: column; gap: 6px; }
+    .item { background: white; border-radius: 10px; padding: 12px 14px; border-left: 2.5px solid transparent; transition: border-color 0.15s; }
+    .item:hover { border-left-color: #5b7fdb; }
+    .item a { color: #111; text-decoration: none; font-size: 13px; font-weight: 500; line-height: 1.4; display: block; }
+    .item a:hover { color: #3b5fbf; }
+    .item-desc { font-size: 12px; color: #888; margin-top: 3px; line-height: 1.4; }
+    .item-meta { font-size: 11px; color: #aaa; margin-top: 6px; display: flex; gap: 10px; }
+    .item-meta span:last-child { margin-left: auto; }
+    .empty { text-align: center; padding: 60px 0; color: #bbb; font-size: 14px; }
+    .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AI 트렌드 레이더</h1>
+  <a href="/logout">로그아웃</a>
+</header>
+
+<div class="container">
+  <div class="top-bar">
+    <input type="text" id="keyword" value="AI, 바이브코딩, LLM" placeholder="관심 키워드" />
+    <button class="fetch-btn" id="fetchBtn" onclick="startFetch()">트렌드 수집</button>
+  </div>
+
+  <div class="sources">
+    <div class="source-card">
+      <div class="dot" id="dot-reddit"></div>
+      <div class="source-info">
+        <div class="name">Reddit</div>
+        <div class="desc" id="desc-reddit">r/MachineLearning 외 3개</div>
+      </div>
+    </div>
+    <div class="source-card">
+      <div class="dot" id="dot-github"></div>
+      <div class="source-info">
+        <div class="name">GitHub</div>
+        <div class="desc" id="desc-github">AI/LLM 인기 레포</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-box" id="summaryBox" style="display:none">
+    <div class="summary-label">Claude 요약</div>
+    <div class="summary-text" id="summaryText"></div>
+  </div>
+
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="tab active" onclick="switchTab('reddit', this)">Reddit</button>
+    <button class="tab" onclick="switchTab('github', this)">GitHub</button>
+  </div>
+
+  <div class="items" id="items"></div>
+  <div class="empty" id="empty">수집 버튼을 눌러 트렌드를 불러오세요</div>
+</div>
+
+<script>
+let allData = { reddit: [], github: [] };
+let activeTab = 'reddit';
+
+function setDot(id, state) {
+  const dot = document.getElementById('dot-' + id);
+  dot.className = 'dot ' + state;
+}
+
+function setDesc(id, text) {
+  document.getElementById('desc-' + id).textContent = text;
+}
+
+async function fetchReddit() {
+  setDot('reddit', 'loading');
+  setDesc('reddit', '수집 중...');
+  try {
+    const subs = 'MachineLearning+ChatGPT+artificial+LocalLLaMA';
+    const res = await fetch(`https://www.reddit.com/r/${subs}/hot.json?limit=20`);
+    const json = await res.json();
+    const posts = json.data.children
+      .map(c => c.data)
+      .filter(p => !p.stickied)
+      .slice(0, 12)
+      .map(p => ({
+        title: p.title,
+        url: 'https://reddit.com' + p.permalink,
+        score: p.score,
+        sub: 'r/' + p.subreddit,
+        comments: p.num_comments
+      }));
+    allData.reddit = posts;
+    setDot('reddit', 'active');
+    setDesc('reddit', posts.length + '개 수집 완료');
+    return posts;
+  } catch(e) {
+    setDot('reddit', '');
+    setDesc('reddit', '수집 실패');
+    return [];
+  }
+}
+
+async function fetchGitHub() {
+  setDot('github', 'loading');
+  setDesc('github', '수집 중...');
+  try {
+    const res = await fetch('https://api.github.com/search/repositories?q=ai+OR+llm+OR+claude+OR+gpt&sort=stars&order=desc&per_page=12&created:>2024-01-01');
+    const json = await res.json();
+    const repos = (json.items || []).slice(0, 12).map(r => ({
+      title: r.full_name,
+      url: r.html_url,
+      score: r.stargazers_count,
+      sub: r.language || 'Unknown',
+      comments: r.forks_count,
+      desc: r.description
+    }));
+    allData.github = repos;
+    setDot('github', 'active');
+    setDesc('github', repos.length + '개 수집 완료');
+    return repos;
+  } catch(e) {
+    setDot('github', '');
+    setDesc('github', '수집 실패');
+    return [];
+  }
+}
+
+async function summarize(reddit, github) {
+  const box = document.getElementById('summaryBox');
+  const text = document.getElementById('summaryText');
+  box.style.display = 'block';
+  text.innerHTML = '<span class="spin"></span>Claude가 요약 중...';
+
+  const keyword = document.getElementById('keyword').value;
+  const redditText = reddit.slice(0, 8).map((p, i) => `${i+1}. [Reddit ${p.sub}] ${p.title}`).join('\n');
+  const githubText = github.slice(0, 8).map((r, i) => `${i+1}. [GitHub] ${r.title}: ${r.desc || ''} (★${r.score})`).join('\n');
+  const prompt = `다음은 Reddit과 GitHub에서 핫한 AI/기술 게시글과 프로젝트예요.\n\n[Reddit]\n${redditText}\n\n[GitHub]\n${githubText}\n\n키워드 관심사: ${keyword}\n\n이 내용을 바탕으로:\n1. 지금 가장 뜨거운 트렌드 3가지를 한국어로 요약해줘\n2. 각 트렌드마다 2-3문장으로 쉽게 설명해줘\n3. 마지막에 "오늘의 핵심 한줄"로 전체를 한 문장으로 정리해줘\n\n친근하고 읽기 쉽게 써줘.`;
+
+  try {
+    const res = await fetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+    const data = await res.json();
+    text.textContent = data.text || '요약 실패';
+  } catch(e) {
+    text.textContent = '요약 중 오류 발생';
+  }
+}
+
+async function startFetch() {
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>수집 중...';
+  document.getElementById('summaryBox').style.display = 'none';
+  document.getElementById('tabs').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('items').innerHTML = '';
+  allData = { reddit: [], github: [] };
+
+  const [reddit, github] = await Promise.all([fetchReddit(), fetchGitHub()]);
+
+  if (reddit.length > 0 || github.length > 0) {
+    document.getElementById('tabs').style.display = 'flex';
+    renderItems('reddit');
+    await summarize(reddit, github);
+  } else {
+    document.getElementById('empty').style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '트렌드 수집';
+}
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderItems(tab);
+}
+
+function renderItems(tab) {
+  const items = allData[tab] || [];
+  const container = document.getElementById('items');
+  if (!items.length) { container.innerHTML = ''; return; }
+  container.innerHTML = items.map(item => `
+    <div class="item">
+      <a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a>
+      ${item.desc ? `<div class="item-desc">${item.desc.slice(0, 100)}${item.desc.length > 100 ? '...' : ''}</div>` : ''}
+      <div class="item-meta">
+        <span>★ ${Number(item.score).toLocaleString()}</span>
+        <span>${tab === 'reddit' ? '💬 ' + Number(item.comments).toLocaleString() : '🍴 ' + Number(item.comments).toLocaleString()}</span>
+        <span>${item.sub}</span>
+      </div>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>
